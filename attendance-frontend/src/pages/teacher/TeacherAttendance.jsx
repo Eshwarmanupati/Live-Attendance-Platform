@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import { classService } from "../../api/classes";
-import { attendanceService } from "../../api/attendance";
 import { useWs } from "../../context/WsContext";
 import { useToast } from "../../components/ui/Toast";
 import LiveAttendancePanel from "../../components/teacher/LiveAttendancePanel";
@@ -10,7 +9,6 @@ const TeacherAttendance = () => {
   const toast = useToast();
   const { send, subscribe, activeSession } = useWs();
   const [classes, setClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,8 +18,8 @@ const TeacherAttendance = () => {
   }, []);
 
   useEffect(() => {
-    const unsub = subscribe("SESSION_ENDED", (p) => {
-      toast(`Session ended. ${p.finalPresentCount} attended.`, "info");
+    const unsub = subscribe("SESSION_ENDED", (payload) => {
+      toast(`Session ended. ${payload.finalPresentCount} attended.`, "info");
     });
     return unsub;
   }, [subscribe, toast]);
@@ -32,7 +30,6 @@ const TeacherAttendance = () => {
   return (
     <DashboardLayout title="Attendance Control" subtitle="Start and manage live attendance sessions">
       <div className="max-w-2xl space-y-4">
-        {/* Active session alert */}
         {activeSession && (
           <div className="card border-jade-500/40 shadow-glow-jade animate-fade-up">
             <div className="flex items-center gap-2 mb-1">
@@ -50,7 +47,6 @@ const TeacherAttendance = () => {
           </div>
         )}
 
-        {/* Class selector */}
         <div className="card">
           <p className="text-xs font-mono text-ink-400 uppercase tracking-wider mb-3">
             Select a class to start attendance

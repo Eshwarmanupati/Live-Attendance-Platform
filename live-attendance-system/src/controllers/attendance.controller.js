@@ -1,49 +1,22 @@
-import Attendance from "../models/Attendance.js";
-import Class from "../models/Class.js";
-import ApiError from "../utils/ApiError.js";
+import * as attendanceService from "../services/attendance.service.js";
 
-/**
- * @desc    Get attendance records for a specific class
- * @route   GET /api/attendance/:classId
- * @access  Private (teacher of that class, or enrolled student)
- */
 const getAttendanceByClass = async (req, res, next) => {
   try {
-    const { classId } = req.params;
-
-    // Verify class exists
-    const classItem = await Class.findById(classId);
-    if (!classItem) {
-      throw new ApiError(404, "Class not found.");
-    }
-
-    const attendance = await Attendance.find({ classId })
-      .populate("studentId", "name email")
-      .sort({ timestamp: -1 });
-
+    const records = await attendanceService.getAttendanceByClass(req.params.classId);
     res.status(200).json({
       success: true,
-      count: attendance.length,
-      data: { attendance },
+      count: records.length,
+      data: { attendance: records },
     });
   } catch (error) {
     next(error);
   }
 };
 
-/**
- * @desc    Get attendance for a specific student in a class
- * @route   GET /api/attendance/:classId/student/:studentId
- * @access  Private
- */
 const getStudentAttendance = async (req, res, next) => {
   try {
     const { classId, studentId } = req.params;
-
-    const record = await Attendance.findOne({ classId, studentId }).populate(
-      "studentId",
-      "name email"
-    );
+    const record = await attendanceService.getStudentAttendance(classId, studentId);
 
     if (!record) {
       return res.status(200).json({

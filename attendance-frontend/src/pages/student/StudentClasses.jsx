@@ -15,7 +15,7 @@ const StudentClasses = () => {
       .then((r) => setClasses(r.data.data.classes))
       .catch(() => toast("Failed to load classes", "error"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [toast]);
 
   const filtered = classes.filter((c) =>
     c.title.toLowerCase().includes(search.toLowerCase()) ||

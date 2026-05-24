@@ -21,7 +21,6 @@ const attendanceSchema = new Schema(
       type: Date,
       required: true,
     },
-    // Explicit timestamp for the moment attendance was marked
     timestamp: {
       type: Date,
       default: Date.now,
@@ -30,10 +29,7 @@ const attendanceSchema = new Schema(
   { timestamps: true }
 );
 
-/**
- * Compound unique index: one attendance record per student per class session.
- * This is the DB-level guard against duplicate attendance entries.
- */
+// One record per student per class per session
 attendanceSchema.index(
   { classId: 1, studentId: 1, sessionDate: 1 },
   { unique: true }

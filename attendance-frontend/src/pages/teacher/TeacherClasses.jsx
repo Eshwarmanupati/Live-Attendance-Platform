@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import { classService } from "../../api/classes";
 import { attendanceService } from "../../api/attendance";
@@ -11,19 +11,21 @@ const TeacherClasses = () => {
   const toast = useToast();
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null); // class whose attendance is shown
+  const [selected, setSelected] = useState(null);
   const [attendance, setAttendance] = useState([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
 
-  useEffect(() => {
+  const fetchClasses = useCallback(() => {
     classService.getAll()
       .then((r) => setClasses(r.data.data.classes))
       .catch(() => toast("Failed to load classes", "error"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [toast]);
+
+  useEffect(() => { fetchClasses(); }, [fetchClasses]);
 
   const loadAttendance = async (cls) => {
     setSelected(cls);
@@ -44,10 +46,13 @@ const TeacherClasses = () => {
       const res = await classService.update(editing._id, data);
       setClasses((p) => p.map((c) => (c._id === editing._id ? res.data.data.class : c)));
       toast("Class updated!", "success");
-      setModalOpen(false); setEditing(null);
+      setModalOpen(false);
+      setEditing(null);
     } catch (err) {
       toast(err.response?.data?.message || "Update failed", "error");
-    } finally { setFormLoading(false); }
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -57,13 +62,14 @@ const TeacherClasses = () => {
       setClasses((p) => p.filter((c) => c._id !== id));
       if (selected?._id === id) setSelected(null);
       toast("Class deleted", "info");
-    } catch { toast("Failed to delete", "error"); }
+    } catch {
+      toast("Failed to delete", "error");
+    }
   };
 
   return (
     <DashboardLayout title="All Classes" subtitle="View and manage your classes">
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Class list */}
         <div className="lg:col-span-2 space-y-3">
           <p className="text-xs font-mono text-ink-500 uppercase tracking-wider mb-3">
             {classes.length} Classes
@@ -99,7 +105,6 @@ const TeacherClasses = () => {
           ))}
         </div>
 
-        {/* Attendance panel */}
         <div className="lg:col-span-3">
           {!selected ? (
             <div className="card text-center py-20 border-dashed border-ink-800 h-full flex flex-col items-center justify-center">
@@ -159,6 +164,7 @@ const TeacherClasses = () => {
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title="Edit Class">
         <ClassForm
+          key={editing?._id || "new"}
           initial={editing || {}}
           onSubmit={handleUpdate}
           onCancel={() => { setModalOpen(false); setEditing(null); }}

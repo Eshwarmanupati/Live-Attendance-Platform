@@ -24,7 +24,13 @@ const useAttendance = (classId) => {
     }
   }, [classId]);
 
-  useEffect(() => { fetchRecords(); }, [fetchRecords]);
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (active) fetchRecords();
+    });
+    return () => { active = false; };
+  }, [fetchRecords]);
 
   useEffect(() => {
     const unsubUpdated = subscribe("ATTENDANCE_UPDATED", (payload) => {

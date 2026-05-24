@@ -1,7 +1,3 @@
-/**
- * Thin wrapper around localStorage with JSON support and error handling.
- * Prevents crashes if localStorage is blocked (private browsing, etc.)
- */
 const storage = {
   get(key) {
     try {
@@ -12,17 +8,17 @@ const storage = {
 
   set(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); }
-    catch (e) { console.error("storage.set failed:", e); }
+    catch { /* noop */ }
   },
 
   remove(key) {
     try { localStorage.removeItem(key); }
-    catch { /* silent */ }
+    catch { /* noop */ }
   },
 
   clear() {
     try { localStorage.clear(); }
-    catch { /* silent */ }
+    catch { /* noop */ }
   },
 };
 

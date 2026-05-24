@@ -30,24 +30,12 @@ const userSchema = new Schema(
   { timestamps: true }
 );
 
-/**
- * Hash the password before saving.
- * Only runs if the password field was modified (prevents re-hashing on other updates).
- */
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
-
   this.password = await bcrypt.hash(this.password, 12);
 });
 
-/**
- * Instance method to compare a plain-text password with the stored hash.
- * Used during login.
- *
- * @param {string} candidatePassword - Plain-text password from request
- * @returns {Promise<boolean>}
- */
-userSchema.methods.comparePassword = async function (candidatePassword) {
+userSchema.methods.comparePassword = function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 

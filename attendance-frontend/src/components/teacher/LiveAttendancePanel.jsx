@@ -2,16 +2,11 @@ import { useState, useEffect } from "react";
 import { useWs } from "../../context/WsContext";
 import { attendanceService } from "../../api/attendance";
 
-/**
- * Real-time attendance panel shown during an active teacher session.
- * Subscribes to WS ATTENDANCE_UPDATED events and shows live count.
- */
 const LiveAttendancePanel = ({ classId }) => {
   const { subscribe } = useWs();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Load existing attendance records for this session
   useEffect(() => {
     if (!classId) return;
     attendanceService.getByClass(classId)
@@ -20,11 +15,9 @@ const LiveAttendancePanel = ({ classId }) => {
       .finally(() => setLoading(false));
   }, [classId]);
 
-  // Subscribe to live attendance updates
   useEffect(() => {
     const unsub = subscribe("ATTENDANCE_UPDATED", (payload) => {
       if (payload.classId !== classId) return;
-      // Add new student entry to the top
       setRecords((prev) => {
         const exists = prev.some((r) => r.studentId?._id === payload.studentId || r.studentId === payload.studentId);
         if (exists) return prev;

@@ -29,9 +29,7 @@ export const setupWebSocketServer = (httpServer) => {
 
     try {
       user = await authenticateWsClient(token);
-      console.log(`🔌 WS connected: ${user.name} (${user.role})`);
     } catch (error) {
-      console.warn(`⛔ WS rejected: ${error.message}`);
       ws.send(JSON.stringify({ type: WS_EVENTS.ERROR, message: `Authentication failed: ${error.message}` }));
       ws.close();
       return;
@@ -42,7 +40,7 @@ export const setupWebSocketServer = (httpServer) => {
     try {
       await notifyActiveSession(ws);
     } catch (error) {
-      console.error("❌ Failed to sync active session:", error.message);
+      console.error("Failed to sync active session:", error.message);
     }
 
     ws.on("message", async (data) => {
@@ -55,7 +53,6 @@ export const setupWebSocketServer = (httpServer) => {
       }
 
       const { type, ...payload } = parsed;
-      console.log(`📨 WS event: ${type} from ${user.name}`);
 
       switch (type) {
         case WS_EVENTS.START_SESSION:
@@ -72,15 +69,12 @@ export const setupWebSocketServer = (httpServer) => {
       }
     });
 
-    ws.on("close", () => {
-      console.log(`🔌 WS disconnected: ${user.name}`);
-    });
+    ws.on("close", () => {});
 
     ws.on("error", (error) => {
-      console.error(`❌ WS error for ${user.name}:`, error.message);
+      console.error(`WS error for ${user.name}:`, error.message);
     });
   });
 
-  console.log("✅ WebSocket server is ready.");
   return wss;
 };

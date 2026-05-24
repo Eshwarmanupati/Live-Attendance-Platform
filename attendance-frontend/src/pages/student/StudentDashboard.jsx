@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import { classService } from "../../api/classes";
 import { useWs } from "../../context/WsContext";
@@ -14,39 +14,42 @@ const StudentDashboard = () => {
   const toast = useToast();
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
-  // Track which classIds this student has already marked attendance for this session
   const [markedClasses, setMarkedClasses] = useState(new Set());
-  const [marking, setMarking] = useState(null); // classId currently being marked
+  const [marking, setMarking] = useState(null);
 
   useEffect(() => {
     classService.getAll()
       .then((r) => setClasses(r.data.data.classes))
       .catch(() => toast("Failed to load classes", "error"))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reset marked state when session changes
-  useEffect(() => {
-    if (!activeSession) setMarkedClasses(new Set());
-  }, [activeSession?.classId]);
+  const sessionClassId = activeSession?.classId;
 
-  // Listen for WS events
+  // Reset marked state when the active session changes
+  const currentMarked = useMemo(() => {
+    if (!sessionClassId) return new Set();
+    return markedClasses;
+  }, [sessionClassId, markedClasses]);
+
   useEffect(() => {
-    const unsub1 = subscribe("SESSION_STARTED", (p) => {
-      toast(`📣 Attendance started for "${p.classTitle}"`, "info");
+    const unsub1 = subscribe("SESSION_STARTED", () => {
+      toast(`Attendance session started`, "info");
     });
-    const unsub2 = subscribe("SESSION_ENDED", (p) => {
+    const unsub2 = subscribe("SESSION_ENDED", () => {
       toast("Session has ended", "warning");
+      setMarkedClasses(new Set());
     });
-    const unsub3 = subscribe("ERROR", (p) => {
-      toast(p.message, "error");
+    const unsub3 = subscribe("ERROR", (payload) => {
+      toast(payload.message, "error");
       setMarking(null);
     });
-    const unsub4 = subscribe("ATTENDANCE_UPDATED", (p) => {
-      if (String(p.studentId) === String(userId)) {
-        setMarkedClasses((prev) => new Set([...prev, String(p.classId)]));
+    const unsub4 = subscribe("ATTENDANCE_UPDATED", (payload) => {
+      if (String(payload.studentId) === String(userId)) {
+        setMarkedClasses((prev) => new Set([...prev, String(payload.classId)]));
         setMarking(null);
-        toast("✓ Attendance marked!", "success");
+        toast("Attendance marked!", "success");
       }
     });
     return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
@@ -63,7 +66,6 @@ const StudentDashboard = () => {
       title="Student Dashboard"
       subtitle="Join live sessions and mark your attendance"
     >
-      {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <div className="stat-card">
           <p className="text-xs font-mono text-ink-500 uppercase tracking-wider mb-2">Enrolled Classes</p>
@@ -81,7 +83,6 @@ const StudentDashboard = () => {
         </div>
       </div>
 
-      {/* Live session banner */}
       {activeSession && (
         <div className="card border-jade-500/40 shadow-glow-jade mb-6 animate-fade-up">
           <div className="flex items-center gap-3">
@@ -94,7 +95,7 @@ const StudentDashboard = () => {
                 Started {new Date(activeSession.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
-            {!markedClasses.has(String(activeSession.classId)) ? (
+            {!currentMarked.has(String(activeSession.classId)) ? (
               <button
                 onClick={() => handleMarkAttendance(activeSession.classId)}
                 disabled={!!marking}
@@ -109,7 +110,6 @@ const StudentDashboard = () => {
         </div>
       )}
 
-      {/* Classes grid */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-ink-300 uppercase tracking-wider font-mono">
           Available Classes
@@ -129,7 +129,7 @@ const StudentDashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {classes.map((cls) => {
             const isSessionClass = String(activeSession?.classId) === String(cls._id);
-            const isMarked = markedClasses.has(String(cls._id));
+            const isMarked = currentMarked.has(String(cls._id));
             return (
               <div
                 key={cls._id}

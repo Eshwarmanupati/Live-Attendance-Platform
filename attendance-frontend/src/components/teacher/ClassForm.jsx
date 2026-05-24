@@ -1,16 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Spinner from "../ui/Spinner";
 
-/**
- * Reusable form for creating and editing classes.
- * Pass `initial` to pre-fill for edit mode.
- */
 const ClassForm = ({ initial = {}, onSubmit, onCancel, loading }) => {
   const [form, setForm] = useState({ title: "", description: "", ...initial });
   const [errors, setErrors] = useState({});
-
-  // Sync when initial changes (edit → different class)
-  useEffect(() => { setForm({ title: "", description: "", ...initial }); }, [initial]);
 
   const validate = () => {
     const errs = {};

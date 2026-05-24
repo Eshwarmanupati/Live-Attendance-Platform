@@ -1,4 +1,3 @@
-/** Zod v4 exposes validation messages on `issues`, not `errors`. */
 export const formatZodError = (zodError) =>
   zodError.issues.map((issue) => issue.message).join(", ");
 

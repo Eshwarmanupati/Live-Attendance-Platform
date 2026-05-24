@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import { classService } from "../../api/classes";
 import { useWs } from "../../context/WsContext";
@@ -20,7 +20,7 @@ const TeacherDashboard = () => {
   const [editing, setEditing] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
 
-  const fetchClasses = async () => {
+  const fetchClasses = useCallback(async () => {
     try {
       const res = await classService.getAll();
       setClasses(res.data.data.classes);
@@ -29,17 +29,22 @@ const TeacherDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
-  useEffect(() => { fetchClasses(); }, []);
-
-  // Listen for session events from WS
   useEffect(() => {
-    const unsub1 = subscribe("SESSION_STARTED", (p) => {
-      toast(`Session started for class`, "success");
+    let active = true;
+    Promise.resolve().then(() => {
+      if (active) fetchClasses();
     });
-    const unsub2 = subscribe("SESSION_ENDED", (p) => {
-      toast(`Session ended. ${p.finalPresentCount} students present.`, "info");
+    return () => { active = false; };
+  }, [fetchClasses]);
+
+  useEffect(() => {
+    const unsub1 = subscribe("SESSION_STARTED", () => {
+      toast("Session started", "success");
+    });
+    const unsub2 = subscribe("SESSION_ENDED", (payload) => {
+      toast(`Session ended. ${payload.finalPresentCount} students present.`, "info");
     });
     return () => { unsub1(); unsub2(); };
   }, [subscribe, toast]);
@@ -84,13 +89,8 @@ const TeacherDashboard = () => {
     }
   };
 
-  const handleStartSession = (classId) => {
-    send("START_SESSION", { classId });
-  };
-
-  const handleEndSession = (classId) => {
-    send("END_SESSION", { classId });
-  };
+  const handleStartSession = (classId) => send("START_SESSION", { classId });
+  const handleEndSession = (classId) => send("END_SESSION", { classId });
 
   const openCreate = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (cls) => { setEditing(cls); setModalOpen(true); };
@@ -98,9 +98,8 @@ const TeacherDashboard = () => {
   return (
     <DashboardLayout
       title="Teacher Dashboard"
-      subtitle={`Manage your classes and live attendance sessions`}
+      subtitle="Manage your classes and live attendance sessions"
     >
-      {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
           { label: "Total Classes", value: classes.length, icon: "◫" },
@@ -120,7 +119,6 @@ const TeacherDashboard = () => {
         ))}
       </div>
 
-      {/* Live session panel */}
       {activeSession && (
         <div className="card border-jade-500/40 shadow-glow-jade mb-6 animate-fade-up">
           <div className="flex items-center gap-2 mb-1">
@@ -134,7 +132,6 @@ const TeacherDashboard = () => {
         </div>
       )}
 
-      {/* Classes header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-ink-300 uppercase tracking-wider font-mono">
           Your Classes ({classes.length})
@@ -144,7 +141,6 @@ const TeacherDashboard = () => {
         </button>
       </div>
 
-      {/* Classes grid */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(3)].map((_, i) => <CardSkeleton key={i} />)}
@@ -173,13 +169,13 @@ const TeacherDashboard = () => {
         </div>
       )}
 
-      {/* Create / Edit Modal */}
       <Modal
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); }}
         title={editing ? "Edit Class" : "Create New Class"}
       >
         <ClassForm
+          key={editing?._id || "new"}
           initial={editing || {}}
           onSubmit={editing ? handleUpdate : handleCreate}
           onCancel={() => { setModalOpen(false); setEditing(null); }}

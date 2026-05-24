@@ -67,8 +67,6 @@ export const handleStartSession = async (ws, wss, user, payload) => {
     sessionDate,
   };
 
-  console.log(`🟢 Session STARTED: ${cls.title} (${classId})`);
-
   broadcastAll(wss, WS_EVENTS.SESSION_STARTED, {
     classId,
     classTitle: cls.title,
@@ -104,7 +102,6 @@ export const handleMarkAttendance = async (ws, wss, user, payload) => {
 
   try {
     const { record, presentCount } = await markAttendance({ classId, studentId, sessionDate });
-    console.log(`✅ Attendance: ${user.name}`);
 
     broadcastAll(wss, WS_EVENTS.ATTENDANCE_UPDATED, {
       classId,
@@ -119,7 +116,7 @@ export const handleMarkAttendance = async (ws, wss, user, payload) => {
     if (err.code === 11000) {
       return sendTo(ws, WS_EVENTS.ERROR, { message: "You have already marked attendance for this class." });
     }
-    console.error("❌ Error saving attendance:", err.message);
+    console.error("Error saving attendance:", err.message);
     sendTo(ws, WS_EVENTS.ERROR, { message: "Failed to save attendance. Try again." });
   }
 };
@@ -148,8 +145,6 @@ export const handleEndSession = async (ws, wss, user, payload) => {
 
   const { sessionDate } = activeSession;
   const finalCount = await countPresentForSession(classId, sessionDate);
-
-  console.log(`🔴 Session ENDED: ${classId}. Present: ${finalCount}`);
 
   activeSession = null;
 

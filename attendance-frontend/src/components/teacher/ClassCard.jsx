@@ -1,7 +1,3 @@
-/**
- * Displays a single class with teacher actions:
- * edit, delete, start/end attendance session.
- */
 const ClassCard = ({ cls, sessionClassId, onEdit, onDelete, onStartSession, onEndSession }) => {
   const isActive = sessionClassId === cls._id;
 
@@ -9,7 +5,6 @@ const ClassCard = ({ cls, sessionClassId, onEdit, onDelete, onStartSession, onEn
     <div className={`card group transition-all duration-300 hover:border-ink-700
       ${isActive ? "border-jade-500/40 shadow-glow-jade" : "border-ink-800"}`}
     >
-      {/* Status badge */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-white truncate group-hover:text-pulse-300 transition-colors">
@@ -27,14 +22,12 @@ const ClassCard = ({ cls, sessionClassId, onEdit, onDelete, onStartSession, onEn
         )}
       </div>
 
-      {/* Meta */}
       <div className="flex items-center gap-3 text-xs text-ink-500 font-mono mb-4">
         <span>👥 {cls.students?.length || 0} students</span>
         <span>·</span>
         <span>{new Date(cls.createdAt).toLocaleDateString()}</span>
       </div>
 
-      {/* Actions */}
       <div className="flex flex-wrap gap-2 border-t border-ink-800 pt-3">
         {!isActive ? (
           <button onClick={() => onStartSession(cls._id)} className="btn-success text-xs">

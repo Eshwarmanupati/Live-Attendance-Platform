@@ -8,6 +8,7 @@ export const WsProvider = ({ children }) => {
   const wsRef = useRef(null);
   const listenersRef = useRef({}); // eventType → Set of callbacks
   const reconnectTimer = useRef(null);
+  const connectRef = useRef(null);
   const [connected, setConnected] = useState(false);
   const [activeSession, setActiveSession] = useState(null); // { classId, classTitle, startedAt }
 
@@ -59,7 +60,7 @@ export const WsProvider = ({ children }) => {
       setConnected(false);
       console.log("🔌 WebSocket disconnected, reconnecting in 3s…");
       // Auto-reconnect after 3 seconds
-      reconnectTimer.current = setTimeout(connect, 3000);
+      reconnectTimer.current = setTimeout(() => connectRef.current?.(), 3000);
     };
 
     ws.onerror = (err) => {
@@ -67,6 +68,10 @@ export const WsProvider = ({ children }) => {
       ws.close();
     };
   }, [token]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // Connect when token is available
   useEffect(() => {
