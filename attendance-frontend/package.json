@@ -38,5 +38,8 @@
     "vite": "^8.0.12",
     "vitest": "^5.0.1"
   },
-  "description": "React frontend for the Live Attendance System."
+  "description": "React frontend for the Live Attendance System.",
+  "engines": {
+    "node": ">=20.19"
+  }
 }
