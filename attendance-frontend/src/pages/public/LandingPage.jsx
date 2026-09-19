@@ -1,8 +1,8 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/ui/Toast";
-import { errorMessage } from "../../api/axios";
+import { errorMessage, warmUp } from "../../api/axios";
 import Icon from "../../components/ui/Icon";
 import Spinner from "../../components/ui/Spinner";
 import { DEMO_ACCOUNTS, ROUTES, dashboardFor } from "../../utils/constants";
@@ -49,9 +49,20 @@ const LandingPage = () => {
   const toast = useToast();
   const navigate = useNavigate();
   const [pending, setPending] = useState(null);
+  const [slow, setSlow] = useState(false);
+  const slowTimer = useRef(null);
+
+  // Wake a sleeping free-tier API while the visitor reads the page.
+  useEffect(() => {
+    warmUp();
+  }, []);
+
+  useEffect(() => () => clearTimeout(slowTimer.current), []);
 
   const signInAsDemo = async (role) => {
     setPending(role);
+    // Only mention the wait if there actually is one.
+    slowTimer.current = setTimeout(() => setSlow(true), 3500);
     try {
       const account = DEMO_ACCOUNTS[role];
       const signedIn = await login(account);
@@ -60,6 +71,8 @@ const LandingPage = () => {
     } catch (error) {
       toast(errorMessage(error, "Demo sign-in failed. The API may still be waking up."), "error");
     } finally {
+      clearTimeout(slowTimer.current);
+      setSlow(false);
       setPending(null);
     }
   };
@@ -132,8 +145,9 @@ const LandingPage = () => {
               </button>
             </div>
             <p className="text-xs text-ink-400 font-mono mt-4">
-              Demo accounts, pre-loaded with classes and history. Open both in two windows to watch
-              a session run live.
+              {slow
+                ? "Waking the server — free hosting sleeps when idle, this takes a few seconds…"
+                : "Demo accounts, pre-loaded with classes and history. Open both in two windows to watch a session run live."}
             </p>
           </div>
         </section>
@@ -165,7 +179,7 @@ const LandingPage = () => {
       <footer className="max-w-5xl mx-auto px-5 sm:px-6 py-8 border-t border-ink-800 flex flex-col sm:flex-row items-center justify-between gap-3">
         <p className="text-xs text-ink-400">Built by Eshwar Manupati</p>
         <a
-          href="https://github.com/Eshwarmanupati/Live-Attendence-Platform"
+          href="https://github.com/Eshwarmanupati/Live-Attendance-Platform"
           target="_blank"
           rel="noreferrer"
           className="text-xs text-pulse-300 hover:text-pulse-200 transition-colors focus-ring rounded"

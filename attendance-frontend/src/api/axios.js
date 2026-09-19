@@ -5,7 +5,9 @@ import { API_URL } from "../utils/constants";
 const api = axios.create({
   baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
-  timeout: 20000,
+  // Free hosting tiers sleep when idle and can take ~30s to answer the first
+  // request, so the ceiling is generous. `warmUp` below hides most of that.
+  timeout: 45000,
 });
 
 api.interceptors.request.use((config) => {
@@ -32,6 +34,15 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+/**
+ * Fire-and-forget request to /health. Called when the landing page mounts so a
+ * sleeping free-tier instance is already awake by the time someone signs in.
+ */
+export const warmUp = () => {
+  const healthUrl = API_URL.replace(/\/api$/, "") + "/health";
+  return fetch(healthUrl, { method: "GET", mode: "cors" }).catch(() => {});
+};
 
 /** Pulls the server's message out of an axios error, with a usable fallback. */
 export const errorMessage = (error, fallback = "Something went wrong. Please try again.") => {
