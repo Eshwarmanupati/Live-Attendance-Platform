@@ -1,11 +1,9 @@
 import ApiError from "../utils/ApiError.js";
 
 const roleMiddleware = (...roles) => (req, _res, next) => {
-  if (!req.user) {
-    return next(new ApiError(401, "Authentication required."));
-  }
+  if (!req.user) return next(ApiError.unauthorized());
   if (!roles.includes(req.user.role)) {
-    return next(new ApiError(403, `Access denied. Required role(s): ${roles.join(", ")}`));
+    return next(ApiError.forbidden(`This action is available to ${roles.join(" or ")} accounts only.`));
   }
   next();
 };

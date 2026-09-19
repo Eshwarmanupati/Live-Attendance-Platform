@@ -1,91 +1,110 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout";
-import { classService } from "../../api/classes";
 import { useWs } from "../../context/WsContext";
 import { useToast } from "../../components/ui/Toast";
+import useClasses from "../../hooks/useClasses";
 import LiveAttendancePanel from "../../components/teacher/LiveAttendancePanel";
+import EmptyState from "../../components/ui/EmptyState";
+import Icon from "../../components/ui/Icon";
+import { RowSkeleton } from "../../components/ui/Skeleton";
+import { WS_IN, WS_OUT } from "../../utils/constants";
 
 const TeacherAttendance = () => {
   const toast = useToast();
-  const { send, subscribe, activeSession } = useWs();
-  const [classes, setClasses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { send, subscribe, activeSessions, sessionFor, connected } = useWs();
+  const { classes, loading } = useClasses({ onError: (m) => toast(m, "error") });
 
   useEffect(() => {
-    classService.getAll()
-      .then((r) => setClasses(r.data.data.classes))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    const unsub = subscribe("SESSION_ENDED", (payload) => {
-      toast(`Session ended. ${payload.finalPresentCount} attended.`, "info");
+    const unsubEnded = subscribe(WS_OUT.SESSION_ENDED, (payload) => {
+      const { present = 0, late = 0, absent = 0 } = payload.summary ?? {};
+      toast(`${payload.classTitle}: ${present + late} attended, ${absent} absent.`, "info");
     });
-    return unsub;
+    const unsubError = subscribe(WS_OUT.ERROR, (payload) => toast(payload.message, "error"));
+    return () => {
+      unsubEnded();
+      unsubError();
+    };
   }, [subscribe, toast]);
 
-  const handleStart = (classId) => send("START_SESSION", { classId });
-  const handleEnd = (classId) => send("END_SESSION", { classId });
+  const act = (event, classId) => {
+    if (!connected) {
+      toast("Not connected to the live server yet. Try again in a moment.", "warning");
+      return;
+    }
+    send(event, { classId: String(classId) });
+  };
+
+  const live = Object.values(activeSessions);
 
   return (
-    <DashboardLayout title="Attendance Control" subtitle="Start and manage live attendance sessions">
-      <div className="max-w-2xl space-y-4">
-        {activeSession && (
-          <div className="card border-jade-500/40 shadow-glow-jade animate-fade-up">
-            <div className="flex items-center gap-2 mb-1">
+    <DashboardLayout
+      title="Live sessions"
+      subtitle="Open a session and watch students mark in"
+    >
+      <div className="max-w-3xl space-y-4">
+        {live.map((session) => (
+          <div key={session.classId} className="card border-jade-500/40 shadow-glow-jade animate-fade-up">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-jade-400 animate-pulse" />
-              <p className="text-sm font-semibold text-jade-300">Active Session</p>
-              <span className="text-xs font-mono text-ink-500 ml-auto">{activeSession.classTitle}</span>
+              <p className="text-sm font-semibold text-jade-300">{session.classTitle}</p>
+              <span className="badge-active ml-auto">Live</span>
             </div>
-            <LiveAttendancePanel classId={activeSession.classId} />
+            <LiveAttendancePanel session={session} />
             <button
-              onClick={() => handleEnd(activeSession.classId)}
-              className="btn-danger w-full mt-4 text-center"
+              type="button"
+              onClick={() => act(WS_IN.END_SESSION, session.classId)}
+              className="btn-danger w-full mt-4"
             >
-              ■ End Session
+              <Icon name="stop" size={14} filled /> End session
             </button>
           </div>
-        )}
+        ))}
 
         <div className="card">
-          <p className="text-xs font-mono text-ink-400 uppercase tracking-wider mb-3">
-            Select a class to start attendance
+          <p className="stat-label mb-3">
+            {live.length > 0 ? "Start another class" : "Choose a class to start"}
           </p>
+
           {loading ? (
-            <div className="space-y-2">
-              {[...Array(3)].map((_, i) => <div key={i} className="h-14 bg-ink-800 animate-pulse rounded-lg" />)}
-            </div>
+            <RowSkeleton count={3} />
           ) : classes.length === 0 ? (
-            <p className="text-ink-600 text-sm text-center py-6">No classes found. Create one first.</p>
+            <EmptyState title="No classes yet" message="Create a class before running a session." />
           ) : (
-            <div className="space-y-2">
+            <ul className="space-y-2">
               {classes.map((cls) => {
-                const isLive = String(activeSession?.classId) === String(cls._id);
+                const id = cls.id ?? cls._id;
+                const session = sessionFor(id);
                 return (
-                  <div
-                    key={cls._id}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all duration-200
-                      ${isLive ? "bg-jade-500/5 border-jade-500/30" : "bg-ink-900 border-ink-800 hover:border-ink-700"}`}
+                  <li
+                    key={id}
+                    className={`list-row ${session ? "!bg-jade-500/5 !border-jade-500/30" : ""}`}
                   >
-                    <div>
-                      <p className="text-sm font-semibold text-white">{cls.title}</p>
-                      <p className="text-xs text-ink-500 font-mono">{cls.students?.length || 0} students enrolled</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">{cls.title}</p>
+                      <p className="text-xs text-ink-400 font-mono flex items-center gap-1.5">
+                        <Icon name="users" size={12} /> {cls.students?.length ?? 0} enrolled
+                        {(cls.students?.length ?? 0) === 0 && (
+                          <span className="text-ember-400">· share code {cls.joinCode}</span>
+                        )}
+                      </p>
                     </div>
-                    {!activeSession ? (
-                      <button onClick={() => handleStart(cls._id)} className="btn-success text-xs flex-shrink-0">
-                        ▶ Start
-                      </button>
-                    ) : isLive ? (
+                    {session ? (
                       <span className="badge-active flex-shrink-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-jade-400 animate-pulse" /> LIVE
+                        <span className="w-1.5 h-1.5 rounded-full bg-jade-400 animate-pulse" /> Live
                       </span>
                     ) : (
-                      <span className="badge-inactive flex-shrink-0">session active</span>
+                      <button
+                        type="button"
+                        onClick={() => act(WS_IN.START_SESSION, id)}
+                        className="btn-success btn-sm flex-shrink-0"
+                      >
+                        <Icon name="play" size={12} filled /> Start
+                      </button>
                     )}
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </div>
       </div>

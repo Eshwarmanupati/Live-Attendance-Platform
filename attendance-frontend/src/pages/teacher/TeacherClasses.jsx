@@ -1,176 +1,215 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout";
-import { classService } from "../../api/classes";
-import { attendanceService } from "../../api/attendance";
+import { attendanceService, downloadClassCsv } from "../../api/attendance";
+import { errorMessage } from "../../api/axios";
 import { useToast } from "../../components/ui/Toast";
-import Modal from "../../components/ui/Modal";
-import ClassForm from "../../components/teacher/ClassForm";
-import { CardSkeleton } from "../../components/ui/Skeleton";
+import useClasses from "../../hooks/useClasses";
+import { CardSkeleton, RowSkeleton } from "../../components/ui/Skeleton";
+import EmptyState from "../../components/ui/EmptyState";
+import StatusBadge from "../../components/ui/StatusBadge";
+import Icon from "../../components/ui/Icon";
+import Spinner from "../../components/ui/Spinner";
+import { formatDate, formatDateTime, formatTime } from "../../utils/formatDate";
 
 const TeacherClasses = () => {
   const toast = useToast();
-  const [classes, setClasses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { classes, loading } = useClasses({ onError: (m) => toast(m, "error") });
+
   const [selected, setSelected] = useState(null);
-  const [attendance, setAttendance] = useState([]);
-  const [attendanceLoading, setAttendanceLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [formLoading, setFormLoading] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [expanded, setExpanded] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
-  const fetchClasses = useCallback(() => {
-    classService.getAll()
-      .then((r) => setClasses(r.data.data.classes))
-      .catch(() => toast("Failed to load classes", "error"))
-      .finally(() => setLoading(false));
-  }, [toast]);
-
-  useEffect(() => { fetchClasses(); }, [fetchClasses]);
-
-  const loadAttendance = async (cls) => {
+  const openClass = async (cls) => {
     setSelected(cls);
-    setAttendanceLoading(true);
+    setSessions([]);
+    setExpanded(null);
+    setSessionsLoading(true);
     try {
-      const res = await attendanceService.getByClass(cls._id);
-      setAttendance(res.data.data.attendance);
-    } catch {
-      toast("Failed to load attendance", "error");
+      const res = await attendanceService.getClassAttendance(cls.id ?? cls._id);
+      const loaded = res.data.data.sessions;
+      setSessions(loaded);
+      // Open the most recent session, which is what a teacher wants to see.
+      setExpanded(loaded[0]?.session.id ?? null);
+    } catch (error) {
+      toast(errorMessage(error, "Could not load attendance."), "error");
     } finally {
-      setAttendanceLoading(false);
+      setSessionsLoading(false);
     }
   };
 
-  const handleUpdate = async (data) => {
-    setFormLoading(true);
+  const exportCsv = async () => {
+    setExporting(true);
     try {
-      const res = await classService.update(editing._id, data);
-      setClasses((p) => p.map((c) => (c._id === editing._id ? res.data.data.class : c)));
-      toast("Class updated!", "success");
-      setModalOpen(false);
-      setEditing(null);
-    } catch (err) {
-      toast(err.response?.data?.message || "Update failed", "error");
+      await downloadClassCsv(selected.id ?? selected._id);
+      toast("Export downloaded.", "success");
+    } catch (error) {
+      toast(error.message || "Export failed.", "error");
     } finally {
-      setFormLoading(false);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!confirm("Delete this class?")) return;
-    try {
-      await classService.delete(id);
-      setClasses((p) => p.filter((c) => c._id !== id));
-      if (selected?._id === id) setSelected(null);
-      toast("Class deleted", "info");
-    } catch {
-      toast("Failed to delete", "error");
+      setExporting(false);
     }
   };
 
   return (
-    <DashboardLayout title="All Classes" subtitle="View and manage your classes">
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+    <DashboardLayout title="Classes" subtitle="Browse rosters and attendance history">
+      <div className="grid gap-5 lg:grid-cols-5">
         <div className="lg:col-span-2 space-y-3">
-          <p className="text-xs font-mono text-ink-500 uppercase tracking-wider mb-3">
-            {classes.length} Classes
-          </p>
+          <p className="stat-label">{loading ? "Loading" : `${classes.length} classes`}</p>
+
           {loading ? (
-            [...Array(3)].map((_, i) => <CardSkeleton key={i} />)
-          ) : classes.map((cls) => (
-            <div
-              key={cls._id}
-              onClick={() => loadAttendance(cls)}
-              className={`card cursor-pointer transition-all duration-200
-                ${selected?._id === cls._id ? "border-pulse-500/50 shadow-glow-pulse" : "border-ink-800 hover:border-ink-700"}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
+            Array.from({ length: 3 }, (_, i) => <CardSkeleton key={i} />)
+          ) : classes.length === 0 ? (
+            <EmptyState title="No classes yet" message="Create a class from the dashboard first." />
+          ) : (
+            classes.map((cls) => {
+              const id = cls.id ?? cls._id;
+              const isSelected = String(selected?.id ?? selected?._id) === String(id);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => openClass(cls)}
+                  aria-pressed={isSelected}
+                  className={`card w-full text-left transition-colors duration-200 focus-ring
+                    ${isSelected ? "border-pulse-500/50 shadow-glow-pulse" : "border-ink-800 hover:border-ink-700"}`}
+                >
                   <h3 className="text-sm font-semibold text-white truncate">{cls.title}</h3>
-                  <p className="text-xs text-ink-500 mt-0.5">
-                    {cls.students?.length || 0} students · {new Date(cls.createdAt).toLocaleDateString()}
+                  <p className="text-xs text-ink-400 mt-1 font-mono flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="flex items-center gap-1.5">
+                      <Icon name="users" size={12} /> {cls.students?.length ?? 0}
+                    </span>
+                    <span>{formatDate(cls.createdAt)}</span>
+                    <span className="badge-code">{cls.joinCode}</span>
                   </p>
-                </div>
-                <div className="flex gap-1 ml-2">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setEditing(cls); setModalOpen(true); }}
-                    className="p-1.5 rounded-lg hover:bg-ink-700 text-ink-500 hover:text-white transition-colors text-xs"
-                  >✎</button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(cls._id); }}
-                    className="p-1.5 rounded-lg hover:bg-rose-500/20 text-ink-500 hover:text-rose-400 transition-colors text-xs"
-                  >✕</button>
-                </div>
-              </div>
-            </div>
-          ))}
+                </button>
+              );
+            })
+          )}
         </div>
 
         <div className="lg:col-span-3">
           {!selected ? (
-            <div className="card text-center py-20 border-dashed border-ink-800 h-full flex flex-col items-center justify-center">
-              <p className="text-3xl mb-3">◫</p>
-              <p className="text-ink-500 text-sm">Select a class to view attendance records</p>
-            </div>
+            <EmptyState
+              icon="chart"
+              title="Select a class"
+              message="Pick a class to see every session it has held and who attended."
+            />
           ) : (
-            <div className="card h-full">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-base font-semibold text-white">{selected.title}</h2>
-                  <p className="text-xs text-ink-500 font-mono">Attendance Records</p>
+            <div className="card">
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-white truncate">{selected.title}</h2>
+                  <p className="text-xs text-ink-400 font-mono mt-0.5">
+                    {sessions.length} session{sessions.length === 1 ? "" : "s"} ·{" "}
+                    {selected.students?.length ?? 0} enrolled
+                  </p>
                 </div>
-                <span className="text-xs font-mono bg-pulse-500/10 text-pulse-400 border border-pulse-500/20 px-2 py-1 rounded-full">
-                  {attendance.length} records
-                </span>
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  className="btn-ghost btn-sm"
+                  disabled={exporting || sessions.length === 0}
+                >
+                  {exporting ? <Spinner size="sm" /> : <Icon name="download" size={14} />} CSV
+                </button>
               </div>
 
-              {attendanceLoading ? (
-                <div className="space-y-2">
-                  {[...Array(4)].map((_, i) => <div key={i} className="h-10 bg-ink-800 animate-pulse rounded-lg" />)}
+              {selected.students?.length > 0 && (
+                <div className="mb-5">
+                  <p className="stat-label mb-2">Roster</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selected.students.map((student) => (
+                      <span
+                        key={student._id ?? student.id}
+                        className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-ink-900 border border-ink-800 text-xs text-ink-200"
+                      >
+                        <span className="avatar !w-5 !h-5 !text-[10px]">
+                          {student.name?.[0]?.toUpperCase()}
+                        </span>
+                        {student.name}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              ) : attendance.length === 0 ? (
-                <p className="text-ink-600 text-sm text-center py-10">No attendance records yet</p>
+              )}
+
+              <p className="stat-label mb-2">Sessions</p>
+              {sessionsLoading ? (
+                <RowSkeleton count={4} />
+              ) : sessions.length === 0 ? (
+                <p className="text-sm text-ink-400 text-center py-8">
+                  No sessions held yet. Start one from the dashboard.
+                </p>
               ) : (
-                <div className="space-y-1.5 overflow-y-auto max-h-[500px] pr-1">
-                  {attendance.map((r) => (
-                    <div key={r._id} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-ink-900 border border-ink-800">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-6 h-6 rounded-full bg-pulse-600/20 flex items-center justify-center text-xs font-bold text-pulse-300">
-                          {r.studentId?.name?.[0]?.toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm text-ink-200">{r.studentId?.name}</p>
-                          <p className="text-[10px] font-mono text-ink-600">{r.studentId?.email}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className={`text-xs font-mono px-2 py-0.5 rounded-full border
-                          ${r.status === "present"
-                            ? "text-jade-400 bg-jade-500/10 border-jade-500/30"
-                            : "text-rose-400 bg-rose-500/10 border-rose-500/30"}`}>
-                          {r.status}
-                        </span>
-                        <span className="text-[10px] font-mono text-ink-600">
-                          {new Date(r.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <ul className="space-y-2">
+                  {sessions.map(({ session, records }) => {
+                    const isOpen = expanded === session.id;
+                    const attended = (session.summary?.present ?? 0) + (session.summary?.late ?? 0);
+                    return (
+                      <li key={session.id} className="rounded-xl bg-ink-900/70 border border-ink-800 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setExpanded(isOpen ? null : session.id)}
+                          aria-expanded={isOpen}
+                          className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-ink-800/40 transition-colors focus-ring"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm text-ink-100">{formatDateTime(session.startedAt)}</p>
+                            <p className="text-[11px] font-mono text-ink-400 mt-0.5">
+                              {session.status === "active" ? (
+                                <span className="text-jade-300">live now</span>
+                              ) : (
+                                `${attended} in · ${session.summary?.absent ?? 0} absent`
+                              )}
+                            </p>
+                          </div>
+                          <span className="text-xs font-mono text-ink-300 flex items-center gap-2">
+                            {records.length} records
+                            <Icon name={isOpen ? "close" : "chart"} size={13} />
+                          </span>
+                        </button>
+
+                        {isOpen && (
+                          <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-ink-800">
+                            {records.length === 0 ? (
+                              <p className="text-xs text-ink-400 py-3 text-center">Nobody marked in.</p>
+                            ) : (
+                              records.map((record) => (
+                                <div key={record._id} className="flex items-center justify-between gap-3 px-2 py-2">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <span className="avatar">
+                                      {record.studentId?.name?.[0]?.toUpperCase()}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <p className="text-sm text-ink-100 truncate">{record.studentId?.name}</p>
+                                      <p className="text-[10px] font-mono text-ink-400 truncate">
+                                        {record.studentId?.email}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    <StatusBadge status={record.status} />
+                                    {record.status !== "absent" && (
+                                      <span className="text-[10px] font-mono text-ink-400 hidden sm:inline">
+                                        {formatTime(record.markedAt)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
             </div>
           )}
         </div>
       </div>
-
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title="Edit Class">
-        <ClassForm
-          key={editing?._id || "new"}
-          initial={editing || {}}
-          onSubmit={handleUpdate}
-          onCancel={() => { setModalOpen(false); setEditing(null); }}
-          loading={formLoading}
-        />
-      </Modal>
     </DashboardLayout>
   );
 };

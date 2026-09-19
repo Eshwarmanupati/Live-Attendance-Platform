@@ -1,44 +1,18 @@
-import { signupUser, loginUser } from "../services/auth.service.js";
+import asyncHandler from "../utils/asyncHandler.js";
+import * as authService from "../services/auth.service.js";
 
-const signup = async (req, res, next) => {
-  try {
-    const { token, user } = await signupUser(req.body);
-    res.status(201).json({
-      success: true,
-      message: "Account created successfully.",
-      data: { token, user },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+export const signup = asyncHandler(async (req, res) => {
+  const { token, user } = await authService.signupUser(req.body);
+  res.status(201).json({ success: true, message: "Account created.", data: { token, user } });
+});
 
-const login = async (req, res, next) => {
-  try {
-    const { token, user } = await loginUser(req.body);
-    res.status(200).json({
-      success: true,
-      message: "Logged in successfully.",
-      data: { token, user },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+export const login = asyncHandler(async (req, res) => {
+  const { token, user } = await authService.loginUser(req.body);
+  res.status(200).json({ success: true, message: "Signed in.", data: { token, user } });
+});
 
-const getMe = async (req, res) => {
-  res.status(200).json({
-    success: true,
-    data: {
-      user: {
-        id: req.user._id,
-        name: req.user.name,
-        email: req.user.email,
-        role: req.user.role,
-        createdAt: req.user.createdAt,
-      },
-    },
-  });
-};
+export const getMe = asyncHandler(async (req, res) => {
+  res.status(200).json({ success: true, data: { user: req.user.toPublicJSON() } });
+});
 
 export default { signup, login, getMe };

@@ -1,17 +1,17 @@
 import { z } from "zod";
+import { ROLES } from "../utils/constants.js";
 
-const signupSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters").trim(),
-  email: z.string().email("Invalid email address").toLowerCase(),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  role: z.enum(["teacher", "student"], {
-    errorMap: () => ({ message: "Role must be 'teacher' or 'student'" }),
-  }),
+export const signupSchema = z.object({
+  name: z.string().trim().min(2, "Name must be at least 2 characters").max(80),
+  email: z.email("Enter a valid email address").toLowerCase(),
+  // 8 characters is the floor the User model enforces too.
+  password: z.string().min(8, "Password must be at least 8 characters").max(128),
+  // Zod 4 replaced the v3 `errorMap` option with `error`; the old option was
+  // silently ignored, so an invalid role produced a generic message.
+  role: z.enum(Object.values(ROLES), { error: "Role must be either 'teacher' or 'student'" }),
 });
 
-const loginSchema = z.object({
-  email: z.string().email("Invalid email address").toLowerCase(),
+export const loginSchema = z.object({
+  email: z.email("Enter a valid email address").toLowerCase(),
   password: z.string().min(1, "Password is required"),
 });
-
-export { signupSchema, loginSchema };

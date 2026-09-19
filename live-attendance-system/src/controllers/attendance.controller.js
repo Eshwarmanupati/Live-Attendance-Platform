@@ -1,38 +1,43 @@
+import asyncHandler from "../utils/asyncHandler.js";
 import * as attendanceService from "../services/attendance.service.js";
 
-const getAttendanceByClass = async (req, res, next) => {
-  try {
-    const records = await attendanceService.getAttendanceByClass(req.params.classId);
-    res.status(200).json({
-      success: true,
-      count: records.length,
-      data: { attendance: records },
-    });
-  } catch (error) {
-    next(error);
-  }
+export const getClassAttendance = asyncHandler(async (req, res) => {
+  const sessions = await attendanceService.getClassAttendance(req.params.classId, req.user);
+  res.status(200).json({ success: true, count: sessions.length, data: { sessions } });
+});
+
+export const getSessionAttendance = asyncHandler(async (req, res) => {
+  const { session, records } = await attendanceService.getSessionAttendance(
+    req.params.sessionId,
+    req.user
+  );
+  res.status(200).json({ success: true, count: records.length, data: { session, records } });
+});
+
+export const getMyAttendance = asyncHandler(async (req, res) => {
+  const summary = await attendanceService.getMyAttendanceSummary(req.user);
+  res.status(200).json({ success: true, data: summary });
+});
+
+export const getTeacherStats = asyncHandler(async (req, res) => {
+  const stats = await attendanceService.getTeacherStats(req.user);
+  res.status(200).json({ success: true, data: { stats } });
+});
+
+export const exportClassAttendance = asyncHandler(async (req, res) => {
+  const { csv, filename } = await attendanceService.exportClassAttendanceCsv(
+    req.params.classId,
+    req.user
+  );
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.status(200).send(csv);
+});
+
+export default {
+  getClassAttendance,
+  getSessionAttendance,
+  getMyAttendance,
+  getTeacherStats,
+  exportClassAttendance,
 };
-
-const getStudentAttendance = async (req, res, next) => {
-  try {
-    const { classId, studentId } = req.params;
-    const record = await attendanceService.getStudentAttendance(classId, studentId);
-
-    if (!record) {
-      return res.status(200).json({
-        success: true,
-        message: "No attendance record found.",
-        data: { attendance: null },
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: { attendance: record },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export default { getAttendanceByClass, getStudentAttendance };

@@ -1,0 +1,33 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./live-attendance-system
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      NODE_ENV: development
+      PORT: 5001
+      MONGO_URI: mongodb://mongo:27017/live-attendance
+      # Local development only — production reads this from the host's secrets.
+      JWT_SECRET: local-development-secret-not-for-production-use
+      CLIENT_URL: http://localhost:5173
+      LATE_AFTER_MINUTES: 10
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo-data:

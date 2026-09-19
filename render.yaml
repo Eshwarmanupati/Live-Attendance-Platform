@@ -1,0 +1,25 @@
+# Render blueprint for the API. WebSockets are supported on Render web services;
+# Vercel's serverless functions are not, which is why the API is hosted here.
+services:
+  - type: web
+    name: attend-api
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: live-attendance-system
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false # set in the dashboard: your Atlas connection string
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CLIENT_URL
+        sync: false # set to the deployed frontend origin, e.g. https://attend.vercel.app
+      - key: LATE_AFTER_MINUTES
+        value: 10

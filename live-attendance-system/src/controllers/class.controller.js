@@ -1,66 +1,53 @@
+import asyncHandler from "../utils/asyncHandler.js";
 import * as classService from "../services/class.service.js";
 
-const createClass = async (req, res, next) => {
-  try {
-    const newClass = await classService.createClass(req.body, req.user._id);
-    res.status(201).json({
-      success: true,
-      message: "Class created successfully.",
-      data: { class: newClass },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+export const createClass = asyncHandler(async (req, res) => {
+  const created = await classService.createClass(req.body, req.user._id);
+  res.status(201).json({ success: true, message: "Class created.", data: { class: created } });
+});
 
-const getAllClasses = async (req, res, next) => {
-  try {
-    const classes = await classService.getAllClasses(req.user);
-    res.status(200).json({
-      success: true,
-      count: classes.length,
-      data: { classes },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+export const getAllClasses = asyncHandler(async (req, res) => {
+  const classes = await classService.listClasses(req.user, { scope: req.query.scope });
+  res.status(200).json({ success: true, count: classes.length, data: { classes } });
+});
 
-const getClassById = async (req, res, next) => {
-  try {
-    const classItem = await classService.getClassById(req.params.id);
-    res.status(200).json({
-      success: true,
-      data: { class: classItem },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+export const getClassById = asyncHandler(async (req, res) => {
+  const found = await classService.getClassForUser(req.params.id, req.user);
+  res.status(200).json({ success: true, data: { class: found } });
+});
 
-const updateClass = async (req, res, next) => {
-  try {
-    const updated = await classService.updateClass(req.params.id, req.body, req.user._id);
-    res.status(200).json({
-      success: true,
-      message: "Class updated successfully.",
-      data: { class: updated },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+export const updateClass = asyncHandler(async (req, res) => {
+  const updated = await classService.updateClass(req.params.id, req.body, req.user._id);
+  res.status(200).json({ success: true, message: "Class updated.", data: { class: updated } });
+});
 
-const deleteClass = async (req, res, next) => {
-  try {
-    await classService.deleteClass(req.params.id, req.user._id);
-    res.status(200).json({
-      success: true,
-      message: "Class deleted successfully.",
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+export const deleteClass = asyncHandler(async (req, res) => {
+  await classService.deleteClass(req.params.id, req.user._id);
+  res.status(200).json({ success: true, message: "Class deleted." });
+});
 
-export default { createClass, getAllClasses, getClassById, updateClass, deleteClass };
+export const joinClass = asyncHandler(async (req, res) => {
+  const joined = await classService.enrollByJoinCode(req.body.joinCode, req.user._id);
+  res.status(200).json({ success: true, message: `You joined ${joined.title}.`, data: { class: joined } });
+});
+
+export const enrollInClass = asyncHandler(async (req, res) => {
+  const joined = await classService.enrollById(req.params.id, req.user._id);
+  res.status(200).json({ success: true, message: `You joined ${joined.title}.`, data: { class: joined } });
+});
+
+export const leaveClass = asyncHandler(async (req, res) => {
+  await classService.unenroll(req.params.id, req.user._id);
+  res.status(200).json({ success: true, message: "You left the class." });
+});
+
+export default {
+  createClass,
+  getAllClasses,
+  getClassById,
+  updateClass,
+  deleteClass,
+  joinClass,
+  enrollInClass,
+  leaveClass,
+};

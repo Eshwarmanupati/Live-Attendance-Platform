@@ -1,12 +1,13 @@
 import { z } from "zod";
 
-const markAttendanceSchema = z.object({
-  classId: z.string().min(1, "classId is required"),
-  studentId: z.string().min(1, "studentId is required"),
-});
+const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, "A valid classId is required");
 
-const sessionSchema = z.object({
-  classId: z.string().min(1, "classId is required"),
-});
+/** WebSocket payloads. studentId is deliberately absent — the server uses the
+ *  authenticated socket identity instead of trusting the client. */
+export const sessionEventSchema = z.object({ classId: objectId });
 
-export { markAttendanceSchema, sessionSchema };
+export const markAttendanceSchema = z.object({ classId: objectId });
+
+export const subscribeSchema = z.object({
+  classIds: z.array(objectId).max(100).optional(),
+});

@@ -1,86 +1,148 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useWs } from "../../context/WsContext";
 import { attendanceService } from "../../api/attendance";
+import { WS_OUT, ATTENDANCE_STATUS } from "../../utils/constants";
+import { formatTime, elapsedSince } from "../../utils/formatDate";
+import { RowSkeleton } from "../ui/Skeleton";
+import StatusBadge from "../ui/StatusBadge";
+import Icon from "../ui/Icon";
 
-const LiveAttendancePanel = ({ classId }) => {
+/** Ticks once a second so the session timer stays honest. */
+const useElapsed = (startedAt) => {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!startedAt) return undefined;
+    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, [startedAt]);
+  return startedAt ? elapsedSince(startedAt) : null;
+};
+
+const LiveAttendancePanel = ({ session }) => {
   const { subscribe } = useWs();
+  const { classId, sessionId, startedAt, enrolled } = session;
   const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // A panel is mounted per session (keyed by class), so the initial value is
+  // all that is needed — no synchronous reset inside the effect.
+  const [loading, setLoading] = useState(Boolean(sessionId));
+  const elapsed = useElapsed(startedAt);
+
+  // Load whatever was already marked, so a teacher refreshing mid-session sees
+  // the full roster rather than only the marks that arrive from now on.
+  useEffect(() => {
+    if (!sessionId) return undefined;
+
+    let cancelled = false;
+    attendanceService
+      .getSessionAttendance(sessionId)
+      .then((res) => {
+        if (!cancelled) setRecords(res.data.data.records ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRecords([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
 
   useEffect(() => {
-    if (!classId) return;
-    attendanceService.getByClass(classId)
-      .then((res) => setRecords(res.data.data.attendance || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [classId]);
+    return subscribe(WS_OUT.ATTENDANCE_UPDATED, (payload) => {
+      if (String(payload.classId) !== String(classId)) return;
 
-  useEffect(() => {
-    const unsub = subscribe("ATTENDANCE_UPDATED", (payload) => {
-      if (payload.classId !== classId) return;
       setRecords((prev) => {
-        const exists = prev.some((r) => r.studentId?._id === payload.studentId || r.studentId === payload.studentId);
-        if (exists) return prev;
+        const alreadyListed = prev.some(
+          (record) => String(record.studentId?._id ?? record.studentId) === String(payload.student.id)
+        );
+        if (alreadyListed) return prev;
+
         return [
+          ...prev,
           {
-            _id: Date.now(),
-            studentId: { _id: payload.studentId, name: payload.studentName },
-            status: "present",
-            timestamp: payload.timestamp,
+            _id: `live-${payload.student.id}`,
+            studentId: { _id: payload.student.id, name: payload.student.name },
+            status: payload.status,
+            markedAt: payload.markedAt,
             isNew: true,
           },
-          ...prev,
         ];
       });
     });
-    return unsub;
   }, [classId, subscribe]);
 
-  if (loading) {
-    return (
-      <div className="space-y-2 mt-4">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-10 bg-ink-800 animate-pulse rounded-lg" />
-        ))}
-      </div>
-    );
-  }
+  const counts = useMemo(() => {
+    const present = records.filter((r) => r.status === ATTENDANCE_STATUS.PRESENT).length;
+    const late = records.filter((r) => r.status === ATTENDANCE_STATUS.LATE).length;
+    return { present, late, attended: present + late };
+  }, [records]);
+
+  const total = enrolled ?? 0;
+  const percentage = total > 0 ? Math.round((counts.attended / total) * 100) : 0;
 
   return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-mono text-ink-400 uppercase tracking-wider">Present Students</p>
-        <span className="text-xs font-mono bg-jade-500/15 text-jade-400 border border-jade-500/30 px-2 py-0.5 rounded-full">
-          {records.length} present
-        </span>
+    <div className="mt-4">
+      <div className="flex flex-wrap items-center gap-3 justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <p className="stat-label">Marked in</p>
+          <span className="badge-active">
+            {counts.attended}
+            {total > 0 ? ` / ${total}` : ""} present
+          </span>
+          {counts.late > 0 && (
+            <span className="text-xs font-mono text-ember-400">{counts.late} late</span>
+          )}
+        </div>
+        {elapsed && (
+          <span className="flex items-center gap-1.5 text-xs font-mono text-ink-300">
+            <Icon name="clock" size={13} /> {elapsed}
+          </span>
+        )}
       </div>
 
-      {records.length === 0 ? (
-        <p className="text-xs text-ink-600 text-center py-6">Waiting for students to mark attendance…</p>
+      {total > 0 && (
+        <div className="w-full bg-ink-800 rounded-full h-1.5 mb-4 overflow-hidden">
+          <div
+            className="bg-gradient-to-r from-pulse-500 to-jade-400 h-full rounded-full transition-all duration-500"
+            style={{ width: `${percentage}%` }}
+            role="progressbar"
+            aria-valuenow={counts.attended}
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-label="Students marked in"
+          />
+        </div>
+      )}
+
+      {loading ? (
+        <RowSkeleton count={3} />
+      ) : records.length === 0 ? (
+        <p className="text-sm text-ink-400 text-center py-8">
+          Waiting for students to mark in…
+        </p>
       ) : (
-        <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-          {records.map((r, idx) => (
-            <div
-              key={r._id}
-              className={`flex items-center justify-between px-3 py-2 rounded-lg bg-ink-900 border border-ink-800
-                ${r.isNew ? "animate-slide-in border-jade-500/30" : ""}`}
-              style={{ animationDelay: `${idx * 30}ms` }}
+        <ul className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+          {records.map((record) => (
+            <li
+              key={record._id}
+              className={`list-row ${record.isNew ? "animate-slide-in border-jade-500/30" : ""}`}
             >
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-pulse-600/20 flex items-center justify-center text-pulse-300 text-xs font-bold">
-                  {r.studentId?.name?.[0]?.toUpperCase()}
-                </div>
-                <span className="text-sm text-ink-200">{r.studentId?.name || "Unknown"}</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="avatar">{record.studentId?.name?.[0]?.toUpperCase()}</span>
+                <span className="text-sm text-ink-100 truncate">{record.studentId?.name ?? "Unknown"}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-jade-400">✓ present</span>
-                <span className="text-[10px] font-mono text-ink-600">
-                  {new Date(r.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <StatusBadge status={record.status} />
+                <span className="text-[11px] font-mono text-ink-400 hidden sm:inline">
+                  {formatTime(record.markedAt)}
                 </span>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

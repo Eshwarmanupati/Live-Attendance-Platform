@@ -1,16 +1,25 @@
 import { z } from "zod";
 
-const createClassSchema = z.object({
-  title: z.string().min(3, "Title must be at least 3 characters").trim(),
-  description: z.string().trim().optional(),
-  // students are optional at creation time
-  students: z.array(z.string()).optional(),
+export const createClassSchema = z.object({
+  title: z.string().trim().min(3, "Title must be at least 3 characters").max(120),
+  description: z.string().trim().max(500, "Description must be 500 characters or fewer").optional(),
 });
 
-const updateClassSchema = z.object({
-  title: z.string().min(3, "Title must be at least 3 characters").trim().optional(),
-  description: z.string().trim().optional(),
-  students: z.array(z.string()).optional(),
+export const updateClassSchema = z
+  .object({
+    title: z.string().trim().min(3, "Title must be at least 3 characters").max(120).optional(),
+    description: z.string().trim().max(500).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, { message: "Provide at least one field to update" });
+
+export const joinClassSchema = z.object({
+  joinCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z2-9]{6}$/, "A join code is 6 letters or digits"),
 });
 
-export { createClassSchema, updateClassSchema };
+export const objectIdSchema = z
+  .string()
+  .regex(/^[0-9a-fA-F]{24}$/, "Invalid id");

@@ -1,5 +1,7 @@
 import { Schema, model } from "mongoose";
 import bcrypt from "bcryptjs";
+import config from "../config/env.js";
+import { ROLES } from "../utils/constants.js";
 
 const userSchema = new Schema(
   {
@@ -7,6 +9,7 @@ const userSchema = new Schema(
       type: String,
       required: [true, "Name is required"],
       trim: true,
+      maxlength: [80, "Name must be 80 characters or fewer"],
     },
     email: {
       type: String,
@@ -14,29 +17,53 @@ const userSchema = new Schema(
       unique: true,
       lowercase: true,
       trim: true,
+      index: true,
     },
     password: {
       type: String,
       required: [true, "Password is required"],
-      minlength: [6, "Password must be at least 6 characters"],
+      minlength: [8, "Password must be at least 8 characters"],
       select: false,
     },
     role: {
       type: String,
-      enum: ["teacher", "student"],
+      enum: Object.values(ROLES),
       required: [true, "Role is required"],
     },
+    // Demo accounts are reset by the seed script and cannot be deleted.
+    isDemo: { type: Boolean, default: false },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: {
+      virtuals: true,
+      transform(_doc, ret) {
+        delete ret.password;
+        delete ret.__v;
+        return ret;
+      },
+    },
+  }
 );
 
-userSchema.pre("save", async function () {
+userSchema.pre("save", async function hashPassword() {
   if (!this.isModified("password")) return;
-  this.password = await bcrypt.hash(this.password, 12);
+  this.password = await bcrypt.hash(this.password, config.BCRYPT_ROUNDS);
 });
 
-userSchema.methods.comparePassword = function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+userSchema.methods.comparePassword = function comparePassword(candidate) {
+  return bcrypt.compare(candidate, this.password);
+};
+
+/** The shape sent to clients — never includes the hash. */
+userSchema.methods.toPublicJSON = function toPublicJSON() {
+  return {
+    id: this._id,
+    name: this.name,
+    email: this.email,
+    role: this.role,
+    createdAt: this.createdAt,
+  };
 };
 
 export default model("User", userSchema);
